@@ -4,14 +4,27 @@ PLUGIN.name = "Compass"
 PLUGIN.author = "DobryshDobrysh"
 PLUGIN.description = "Plugin, that adds compass on your server."
 
+if SERVER then
+    netstream.Hook("CompassHoldStart", function(client)
+        client:SetAction("Holding Compass", 1)
+    end)
+
+    netstream.Hook("CompassHoldStop", function(client)
+        client:SetAction()
+    end)
+end
+
 if CLIENT then
     local compassEnabled = false
     local compassPanel = nil
     local keyPressed = false
     local hooksRegistered = false
     local compassMat = Material("MilSim/compass.png")
-    local northPoint = Vector(16000, 0, 0) 
-    local textureOffset = 0 
+    local northPoint = Vector(16000, 0, 0)
+    local textureOffset = 0
+    local holdStartTime = 0
+    local holdDuration = 1
+    local canToggle = true
 
     local function HasCompass()
         local ply = LocalPlayer()
@@ -60,12 +73,13 @@ if CLIENT then
     end
 
     local function ToggleCompass()
-        if not HasCompass() then
+        if not HasCompass() or gui.IsGameUIVisible() or gui.IsConsoleVisible() then
             if compassEnabled then
                 compassEnabled = false
                 if IsValid(compassPanel) then
                     compassPanel:Remove()
                 end
+                netstream.Start("CompassHoldStop")
             end
             return
         end
@@ -81,6 +95,7 @@ if CLIENT then
             end
             ix.chat.Send(LocalPlayer(), "me", "Puts his compass back in his pocket.")
         end
+        netstream.Start("CompassHoldStop")
     end
 
     local function RegisterHooks()
@@ -88,11 +103,25 @@ if CLIENT then
         hooksRegistered = true
 
         hook.Add("Think", "CompassKeyCheck", function()
-            if input.IsKeyDown(KEY_K) and not keyPressed then
+            if input.IsKeyDown(KEY_K) and not keyPressed and not gui.IsGameUIVisible() and not gui.IsConsoleVisible() then
                 keyPressed = true
-                ToggleCompass()
-            elseif not input.IsKeyDown(KEY_K) then
+                holdStartTime = CurTime()
+                if not compassEnabled then
+                    netstream.Start("CompassHoldStart")
+                end
+            elseif input.IsKeyDown(KEY_K) and keyPressed and not gui.IsGameUIVisible() and not gui.IsConsoleVisible() then
+                if canToggle and not compassEnabled and CurTime() - holdStartTime >= holdDuration then
+                    ToggleCompass()
+                    canToggle = false
+                end
+            elseif not input.IsKeyDown(KEY_K) and keyPressed then
                 keyPressed = false
+                if compassEnabled and canToggle then
+                    ToggleCompass()
+                end
+                canToggle = true
+                holdStartTime = 0
+                netstream.Start("CompassHoldStop")
             end
         end)
     end
@@ -119,5 +148,6 @@ function PLUGIN:OnUnloaded()
         hook.Remove("Think", "CompassKeyCheck")
         hook.Remove("InitPostEntity", "CompassInit")
         hook.Remove("OnEntityCreated", "CompassPlayerCheck")
+        netstream.Start("CompassHoldStop")
     end
 end

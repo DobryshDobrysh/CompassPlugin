@@ -6,7 +6,7 @@ PLUGIN.description = "Plugin, that adds compass on your server."
 
 if SERVER then
     netstream.Hook("CompassHoldStart", function(client)
-        client:SetAction("Opening Compass", 1)
+        client:SetAction("Holding Compass", 1)
     end)
 
     netstream.Hook("CompassHoldStop", function(client)
@@ -25,6 +25,7 @@ if CLIENT then
     local holdStartTime = 0
     local holdDuration = 1
     local canToggle = true
+    local isChatOpen = false
 
     local function HasCompass()
         local ply = LocalPlayer()
@@ -73,7 +74,7 @@ if CLIENT then
     end
 
     local function ToggleCompass()
-        if not HasCompass() or gui.IsGameUIVisible() or gui.IsConsoleVisible() then
+        if not HasCompass() or isChatOpen or gui.IsConsoleVisible() then
             if compassEnabled then
                 compassEnabled = false
                 if IsValid(compassPanel) then
@@ -103,13 +104,22 @@ if CLIENT then
         hooksRegistered = true
 
         hook.Add("Think", "CompassKeyCheck", function()
-            if input.IsKeyDown(KEY_K) and not keyPressed and not gui.IsGameUIVisible() and not gui.IsConsoleVisible() then
+            if isChatOpen or gui.IsConsoleVisible() then
+                if keyPressed then
+                    keyPressed = false
+                    holdStartTime = 0
+                    netstream.Start("CompassHoldStop")
+                end
+                return
+            end
+
+            if input.IsKeyDown(KEY_K) and not keyPressed and HasCompass() then
                 keyPressed = true
                 holdStartTime = CurTime()
                 if not compassEnabled then
                     netstream.Start("CompassHoldStart")
                 end
-            elseif input.IsKeyDown(KEY_K) and keyPressed and not gui.IsGameUIVisible() and not gui.IsConsoleVisible() then
+            elseif input.IsKeyDown(KEY_K) and keyPressed then
                 if canToggle and not compassEnabled and CurTime() - holdStartTime >= holdDuration then
                     ToggleCompass()
                     canToggle = false
@@ -123,6 +133,19 @@ if CLIENT then
                 holdStartTime = 0
                 netstream.Start("CompassHoldStop")
             end
+        end)
+
+        hook.Add("StartChat", "CompassChatCheck", function()
+            isChatOpen = true
+            if keyPressed then
+                keyPressed = false
+                holdStartTime = 0
+                netstream.Start("CompassHoldStop")
+            end
+        end)
+
+        hook.Add("FinishChat", "CompassChatCheck", function()
+            isChatOpen = false
         end)
     end
 
@@ -146,9 +169,10 @@ function PLUGIN:OnUnloaded()
             compassPanel:Remove()
         end
         hook.Remove("Think", "CompassKeyCheck")
+        hook.Remove("StartChat", "CompassChatCheck")
+        hook.Remove("FinishChat", "CompassChatCheck")
         hook.Remove("InitPostEntity", "CompassInit")
         hook.Remove("OnEntityCreated", "CompassPlayerCheck")
         netstream.Start("CompassHoldStop")
     end
 end
-

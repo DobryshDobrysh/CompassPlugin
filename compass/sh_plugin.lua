@@ -6,7 +6,7 @@ PLUGIN.description = "Plugin, that adds compass on your server."
 
 if SERVER then
     netstream.Hook("CompassHoldStart", function(client)
-        client:SetAction("Holding Compass", 1)
+        client:SetAction("Opening Compass", 1)
     end)
 
     netstream.Hook("CompassHoldStop", function(client)
@@ -151,3 +151,4 @@ function PLUGIN:OnUnloaded()
         netstream.Start("CompassHoldStop")
     end
 end
+
